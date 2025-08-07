@@ -3,6 +3,7 @@ import requests
 from enum import Enum
 import getpass
 import re
+import sys
 
  
 
@@ -11,9 +12,12 @@ def checkPwnedAPI(password):
     first5 = hashedPassword[:5]
     suffix = hashedPassword[5:]
     url = f"https://api.pwnedpasswords.com/range/{first5}"
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise RuntimeError("HaveIBeenPwned API Request Failed")
+    try:
+        response = requests.get(url, timeout = 5)
+        if response.status_code != 200:
+            return -1
+    except requests.RequestException:
+        return -1
     for line in response.text.splitlines():
         hash, count = line.split(':')
         if hash == suffix:
@@ -67,17 +71,28 @@ def printResponse(breach, problemList, rating):
                 response += "\n- Your password should contain at least one number"
             elif problem == Problem.SPECIAL:
                 response += "\n- Your password should contain at least one special character"
-    if breach == 0:
+    if breach == -1: 
+        response += "\n\nThere has been an issue checking your password against known data breaches: HaveIBeenPwned API request failed.\n"
+    elif breach == 0:
         response += "\n\nYour password has not appeared in known data breaches according to HaveIBeenPwned. \nThis data is up to date with the current HaveIBeenPwned dataset.\n"
     else:
         response += f"\n\nWARNING: Your password has been detected {breach} times in known data breaches according to HaveIBeenPwned.\n Regardless of its strength rating you should consider using a different password.\n"
     print(response)
 def main():
-    password = getpass.getpass("Please enter your password: ")
-    breach = checkPwnedAPI(password)
-    problemList = checkStrength(password)
-    rating = getRating(problemList)
-    printResponse(breach, problemList, rating)
+    passwordList = sys.argv[1:]
+    if passwordList:
+        for password in passwordList:
+            breach = checkPwnedAPI(password)
+            problemList = checkStrength(password)
+            rating = getRating(problemList)
+            print ("\nAnalysis of password: " + password)
+            printResponse(breach, problemList, rating)
+    else:
+        password = getpass.getpass("Please enter your password: ")
+        breach = checkPwnedAPI(password)
+        problemList = checkStrength(password)
+        rating = getRating(problemList)
+        printResponse(breach, problemList, rating)
 
     
     
